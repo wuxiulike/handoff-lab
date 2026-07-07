@@ -1,6 +1,6 @@
 # Handoff Lab
 
-[中文说明](README.zh-CN.md)
+[中文说明](README.zh-CN.md) · [Project Introduction](docs/project-introduction.zh-CN.md) · [Architecture Preview](docs/architecture-diagrams.html)
 
 Local planner-worker delegation bridge for AI coding agents.
 
@@ -11,6 +11,60 @@ Reasonix-style implementation worker, but the project name and package avoid
 claiming official affiliation with either provider.
 
 See [NOTICE.md](NOTICE.md) for trademark and affiliation notes.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    User["Human User<br/>request / observe / approve"]
+    Skill["handoff-lab-delegation Skill<br/>submit structured tasks from Codex"]
+    Server["Handoff Lab Server<br/>Flask API + SSE + state machine"]
+    Viewer["QA Viewer<br/>/qa-viewer<br/>timeline / evidence summary / workspace watch"]
+    Planner["Planner / Reviewer<br/>Codex-style agent<br/>plan, split, QA, accept"]
+    Worker["Implementation Worker<br/>Reasonix-compatible CLI<br/>edit code, run tests, produce evidence"]
+    State["Runtime State<br/>.agent/<br/>task, plan, review, next_fix, logs"]
+    Evidence["Evidence Package<br/>.reasonix/ or .agent/<br/>build report, test log, artifact paths"]
+    Workspace["Target Workspace<br/>the user's real project"]
+
+    User --> Skill
+    User --> Viewer
+    Skill --> Server
+    Viewer <--> Server
+    Server --> Planner
+    Server --> Worker
+    Planner --> State
+    Worker --> Workspace
+    Worker --> Evidence
+    Evidence --> Planner
+    State --> Server
+    Workspace --> Server
+    Planner --> Server
+    Server --> Viewer
+    Server --> User
+```
+
+## Technical Highlights
+
+- **Planner / worker separation**: the planner reviews, designs acceptance
+  criteria, and judges evidence; the worker edits code, runs commands, and
+  produces artifacts.
+- **Evidence-first review**: Handoff Lab treats build reports, test logs, diffs,
+  generated files, previews, and screenshots as review inputs. Claims alone are
+  not enough.
+- **Real worker transport gate**: the delegation skill must use a real local
+  bridge, worker CLI, or explicit adapter. A generic Codex subagent is not
+  accepted as a worker substitute.
+- **Concise process visibility**: `/qa-viewer` shows lifecycle events,
+  summaries, and evidence paths without flooding the browser with full CLI logs.
+- **Codex QA profile**: reviews stay machine-readable as JSON, while optional
+  7-section Markdown guidance gives the worker precise next-round repair
+  instructions.
+- **Long-context worker strategy**: large-context workers receive structured
+  packets instead of raw repository dumps: request, constraints, relevant files,
+  tests, acceptance criteria, prior failures, and required evidence.
+- **Failure escape hatch**: if the worker fails the same review finding three
+  consecutive times, Codex can perform one temporary fallback implementation
+  pass for that task, then return to the normal worker path.
 
 ## What It Does
 
