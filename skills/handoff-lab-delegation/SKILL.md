@@ -169,6 +169,15 @@ This script calls `/api/workspace`, `/api/qa-watch`, and `/api/start`. If it
 fails with `authorization_required`, ask the user to authorize the Web UI; do
 not replace the worker with a generic Codex worker.
 
+Port handling:
+
+- If `--base-url` is provided, the script uses it directly.
+- Otherwise, if `HANDOFF_LAB_URL` is set, the script uses that value.
+- Otherwise, the script probes common local ports through `/api/health` and
+  prefers the service whose reported workspace matches `--workspace`.
+- If multiple services are running and none matches the target workspace, stop
+  and ask the user to set `HANDOFF_LAB_URL` or pass `--base-url`; do not guess.
+
 Use `scripts/emit_viewer_event.py` when the local Handoff Lab viewer is running
 and the user wants to see this workflow from another Codex conversation. Emit
 compact lifecycle events, for example:

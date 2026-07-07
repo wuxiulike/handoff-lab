@@ -48,6 +48,8 @@ python -m pip install -r requirements.txt
 
 - `HANDOFF_LAB_HOST`：绑定地址，默认 `127.0.0.1`。
 - `HANDOFF_LAB_PORT`：端口，默认 `51514`。
+- `HANDOFF_LAB_URL`：可选的客户端/skill 目标服务地址，例如
+  `http://127.0.0.1:51515`。当同时运行多个 Handoff Lab 服务，或服务不在默认端口时使用。
 - `CODEX_CLI`：Codex CLI 路径，默认 `codex`。
 - `REASONIX_CLI`：worker CLI 路径，默认 `reasonix`。
 - `OPENAI_PROFILE`、`OPENAI_MODEL`、`OPENAI_REASONING`：可选 Codex 控制项。Codex 默认使用本机客户端登录态，不要求配置 OpenAI API Key。
@@ -94,6 +96,14 @@ sh ./start_handoff_lab.sh
 $env:HANDOFF_LAB_PORT = "51515"
 python server.py
 ```
+
+如果服务不是默认端口，也建议让 delegation skill 明确指向同一个服务：
+
+```powershell
+$env:HANDOFF_LAB_URL = "http://127.0.0.1:51515"
+```
+
+skill 会通过 `/api/health` 自动发现常见本地端口。如果同时存在多个服务且没有任何一个明确匹配目标工作目录，skill 会直接报错并提示设置 `HANDOFF_LAB_URL` 或 `--base-url`，不会再猜测使用旧服务。
 
 macOS/Linux：
 

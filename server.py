@@ -1545,6 +1545,73 @@ def api_context():
     }
 
 
+def _file_status(rel_path: str, max_chars: int = 4000) -> dict:
+    path = load_workspace_root() / rel_path
+    if not path.exists() or not path.is_file():
+        return {"path": rel_path, "exists": False}
+    stat = path.stat()
+    try:
+        excerpt = path.read_text(encoding="utf-8", errors="ignore")[:max_chars]
+    except OSError:
+        excerpt = ""
+    return {
+        "path": rel_path,
+        "exists": True,
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+        "excerpt": excerpt,
+    }
+
+
+def _is_pipeline_running() -> bool:
+    return bool(_pipeline_thread and _pipeline_thread.is_alive())
+
+
+def _is_terminal_state(state: dict) -> bool:
+    if _is_pipeline_running():
+        return False
+    if state.get("approved"):
+        return True
+    return state.get("status") in {
+        "APPROVED",
+        "MAX_ROUND_REACHED",
+        "MAX_ROUND_RECOMMENDED_STOP",
+        "REASONIX_BUILD_FAILED",
+        "WAIT_TEST",
+        "WAIT_CODEX_REVIEW",
+        "NEEDS_CLARIFICATION",
+        "BLOCKED",
+    }
+
+
+@app.route("/api/state", methods=["GET"])
+def api_state():
+    """Compatibility status endpoint for external skills and Codex threads."""
+    workspace = load_workspace_root()
+    state = load_state()
+    return {
+        "workspace": str(workspace),
+        "running": _is_pipeline_running(),
+        "terminal": _is_terminal_state(state),
+        "status": state.get("status", "UNKNOWN"),
+        "approved": bool(state.get("approved")),
+        "round": state.get("round"),
+        "max_round": state.get("max_round"),
+        "state": state,
+        "build_report": _file_status(".agent/build_report.md"),
+        "test_log": _file_status(".agent/test.log", max_chars=2000),
+    }
+
+
+@app.route("/api/health", methods=["GET"])
+def api_health():
+    return {
+        "ok": True,
+        "workspace": str(load_workspace_root()),
+        "running": _is_pipeline_running(),
+    }
+
+
 @app.route("/api/workspace", methods=["GET", "POST"])
 def api_workspace():
     if request.method == "GET":

@@ -107,6 +107,9 @@ Important variables:
 
 - `HANDOFF_LAB_HOST`: bind host, default `127.0.0.1`.
 - `HANDOFF_LAB_PORT`: bind port, default `51514`.
+- `HANDOFF_LAB_URL`: optional client/skill target URL, for example
+  `http://127.0.0.1:51515`. Use it when multiple Handoff Lab services are
+  running or when the service is not on the default port.
 - `DEEPSEEK_API_KEY`: optional API key for DeepSeek-compatible calls.
 - `DEEPSEEK_BASE_URL`: optional base URL, default `https://api.deepseek.com`.
 - `REASONIX_MODEL`: worker model name, default `deepseek-v4-pro`.
@@ -149,6 +152,18 @@ To use another port:
 $env:HANDOFF_LAB_PORT = "51515"
 python server.py
 ```
+
+If you start the service on a non-default port, point the delegation skill at
+the same service:
+
+```powershell
+$env:HANDOFF_LAB_URL = "http://127.0.0.1:51515"
+```
+
+The skill can auto-discover local services on common ports when `/api/health`
+is available. If multiple services are running and none clearly matches the
+target workspace, it fails fast and asks for `HANDOFF_LAB_URL` or `--base-url`
+instead of guessing.
 
 ## Install The Skill
 

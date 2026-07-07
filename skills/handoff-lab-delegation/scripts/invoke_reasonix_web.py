@@ -17,6 +17,51 @@ import urllib.request
 from pathlib import Path
 
 
+def get_json(base_url: str, path: str, timeout: int = 5) -> dict:
+    req = urllib.request.Request(base_url.rstrip("/") + path, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        return {}
+    try:
+        return json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+
+
+def discover_base_url(workspace: str) -> str:
+    configured = os.environ.get("HANDOFF_LAB_URL", "").strip()
+    if configured:
+        return configured
+
+    workspace_path = str(Path(workspace).expanduser().resolve()).lower()
+    candidates = [
+        "http://127.0.0.1:51514",
+        "http://127.0.0.1:51515",
+        "http://127.0.0.1:51516",
+    ]
+    healthy = []
+    for candidate in candidates:
+        health = get_json(candidate, "/api/health", timeout=2)
+        if not health.get("ok"):
+            continue
+        healthy.append(candidate)
+        service_workspace = str(health.get("workspace") or "").lower()
+        if service_workspace == workspace_path:
+            return candidate
+    if len(healthy) == 1:
+        return healthy[0]
+    if healthy:
+        joined = ", ".join(healthy)
+        raise RuntimeError(
+            "Multiple Handoff Lab services are running, but none reports the "
+            f"target workspace {workspace_path}. Set HANDOFF_LAB_URL or pass "
+            f"--base-url explicitly. Healthy candidates: {joined}"
+        )
+    return candidates[0]
+
+
 def post_json(base_url: str, path: str, payload: dict) -> dict:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
@@ -40,8 +85,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Submit a task packet to the local Handoff Lab Web bridge.")
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("HANDOFF_LAB_URL", "http://127.0.0.1:51514"),
-        help="Handoff Lab Web bridge URL.",
+        default="",
+        help="Handoff Lab Web bridge URL. Defaults to HANDOFF_LAB_URL or local auto-discovery.",
     )
     parser.add_argument("--workspace", required=True, help="Target workspace for the implementation.")
     parser.add_argument("--task-file", help="Markdown packet path to submit.")
@@ -63,7 +108,8 @@ def main() -> int:
     if not task.strip():
         raise SystemExit("missing task: pass --task-file or --task")
 
-    workspace_result = post_json(args.base_url, "/api/workspace", {"path": workspace})
+    base_url = args.base_url.strip() or discover_base_url(workspace)
+    workspace_result = post_json(base_url, "/api/workspace", {"path": workspace})
     result = {
         "workspace": {
             "path": workspace_result.get("path", workspace),
@@ -71,12 +117,13 @@ def main() -> int:
         },
     }
     if not args.no_watch:
-        result["watch"] = post_json(args.base_url, "/api/qa-watch", {"workspace": workspace, "interval": 5})
-    result["start"] = post_json(args.base_url, "/api/start", {
+        result["watch"] = post_json(base_url, "/api/qa-watch", {"workspace": workspace, "interval": 5})
+    result["start"] = post_json(base_url, "/api/start", {
         "task": task,
         "max_round": args.rounds,
         "direct_reasonix": args.direct_reasonix,
     })
+    result["base_url"] = base_url
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
