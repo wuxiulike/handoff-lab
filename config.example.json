@@ -1,0 +1,21 @@
+{
+  "codex": {
+    "profile": "",
+    "model": "",
+    "reasoning": "default",
+    "cli": "codex"
+  },
+  "worker": {
+    "provider": "reasonix",
+    "cli": "reasonix",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-v4-pro"
+  },
+  "vision": {
+    "enabled": false,
+    "provider": "openai-compatible",
+    "base_url": "",
+    "model": "",
+    "api_key_env": "VISION_API_KEY"
+  }
+}

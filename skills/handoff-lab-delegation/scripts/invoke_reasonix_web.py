@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Invoke the local Handoff Lab Web bridge.
+
+This is intentionally small and explicit: it does not implement code itself and
+does not spawn generic Codex subagents. It only submits a task packet to the
+local Web bridge, which owns the real implementation worker execution path.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+
+def post_json(base_url: str, path: str, payload: dict) -> dict:
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        base_url.rstrip("/") + path,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"{path} failed: HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"{path} failed: {exc.reason}") from exc
+    return json.loads(raw or "{}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Submit a task packet to the local Handoff Lab Web bridge.")
+    parser.add_argument(
+        "--base-url",
+        default=os.environ.get("HANDOFF_LAB_URL", "http://127.0.0.1:51514"),
+        help="Handoff Lab Web bridge URL.",
+    )
+    parser.add_argument("--workspace", required=True, help="Target workspace for the implementation.")
+    parser.add_argument("--task-file", help="Markdown packet path to submit.")
+    parser.add_argument("--task", help="Inline task text. Prefer --task-file for real work.")
+    parser.add_argument("--rounds", type=int, default=3, help="Maximum Codex/Reasonix review rounds.")
+    parser.add_argument("--no-watch", action="store_true", help="Do not start qa-viewer workspace monitoring.")
+    parser.add_argument(
+        "--direct-reasonix",
+        action="store_true",
+        help="Skip Codex planning and hand the packet directly to Reasonix.",
+    )
+    args = parser.parse_args()
+
+    workspace = str(Path(args.workspace).expanduser())
+    if args.task_file:
+        task = Path(args.task_file).expanduser().read_text(encoding="utf-8")
+    else:
+        task = args.task or ""
+    if not task.strip():
+        raise SystemExit("missing task: pass --task-file or --task")
+
+    workspace_result = post_json(args.base_url, "/api/workspace", {"path": workspace})
+    result = {
+        "workspace": {
+            "path": workspace_result.get("path", workspace),
+            "tree_root": (workspace_result.get("tree") or {}).get("name", ""),
+        },
+    }
+    if not args.no_watch:
+        result["watch"] = post_json(args.base_url, "/api/qa-watch", {"workspace": workspace, "interval": 5})
+    result["start"] = post_json(args.base_url, "/api/start", {
+        "task": task,
+        "max_round": args.rounds,
+        "direct_reasonix": args.direct_reasonix,
+    })
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(f"BLOCKED: Reasonix Web bridge invocation failed: {exc}", file=sys.stderr)
+        raise SystemExit(2)

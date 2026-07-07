@@ -1,0 +1,4 @@
+interface:
+  display_name: "Handoff Lab Delegation"
+  short_description: "Delegate implementation to a worker with Codex planning and QA."
+  default_prompt: "Use $handoff-lab-delegation to delegate this development task to a real Handoff Lab worker transport. Codex may plan and QA only; do not implement with Codex or a generic Codex subagent. If the worker CLI/Web bridge is unavailable, return BLOCKED."

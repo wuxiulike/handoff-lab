@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Handoff Lab 架构图</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1016;
+      --panel: #121a24;
+      --line: #293647;
+      --text: #e7edf7;
+      --muted: #94a3b8;
+      --blue: #5aa7ff;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 36px 24px 60px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+    }
+    p {
+      color: var(--muted);
+      margin: 0 0 24px;
+    }
+    a {
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 22px;
+      margin-top: 22px;
+      overflow: auto;
+    }
+    h2 {
+      margin: 0 0 16px;
+      font-size: 20px;
+      color: #f4f8ff;
+    }
+    .tip {
+      border-left: 3px solid var(--blue);
+      padding-left: 12px;
+      margin-bottom: 22px;
+    }
+    .mermaid {
+      min-width: 860px;
+      display: flex;
+      justify-content: center;
+    }
+    code {
+      color: #c8ddff;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Handoff Lab 架构图</h1>
+  <p>GitHub: <a href="https://github.com/wuxiulike" target="_blank" rel="noopener noreferrer">github.com/wuxiulike</a></p>
+  <p class="tip">这个页面用于本地预览 Mermaid 图。GitHub README / Markdown 页面会自动渲染 Mermaid；直接用浏览器打开 <code>.md</code> 文件通常只会看到代码块。</p>
+
+  <section>
+    <h2>技术架构图</h2>
+    <div class="mermaid">
+flowchart TB
+    User["Human User<br/>提出开发需求 / 观察过程 / 最终决策"]
+    Skill["handoff-lab-delegation Skill<br/>把其他 Codex 对话中的任务<br/>提交到本地 Handoff Lab"]
+    Server["Handoff Lab Server<br/>Flask API + SSE + 状态机"]
+    Viewer["QA Viewer<br/>/qa-viewer<br/>过程时间线 / 证据摘要 / 工作目录监听"]
+    Planner["Planner / Reviewer<br/>Codex-style Agent<br/>规划、拆任务、QA、验收"]
+    Worker["Implementation Worker<br/>Reasonix-compatible CLI<br/>改代码、跑测试、生成证据"]
+    State["Runtime State<br/>.agent/<br/>任务、计划、review、next_fix、日志"]
+    Evidence["Evidence Package<br/>.reasonix/ 或 .agent/<br/>build report、test log、artifact paths"]
+    Workspace["Target Workspace<br/>用户实际项目目录"]
+
+    User --> Skill
+    User --> Viewer
+    Skill --> Server
+    Viewer <--> Server
+    Server --> Planner
+    Server --> Worker
+    Planner --> State
+    Worker --> Workspace
+    Worker --> Evidence
+    Evidence --> Planner
+    State --> Server
+    Workspace --> Server
+    Planner --> Server
+    Server --> Viewer
+    Server --> User
+    </div>
+  </section>
+
+  <section>
+    <h2>工作流</h2>
+    <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant S as Handoff Lab Server
+    participant C as Codex-style Planner/Reviewer
+    participant R as Reasonix-compatible Worker
+    participant V as QA Viewer
+
+    U->>S: 提交任务和工作目录
+    S->>V: 推送任务开始事件
+    S->>C: 请求规划和验收标准
+    C-->>S: 返回任务包、计划、acceptance
+    S->>R: 发送实现任务包
+    R->>R: 修改代码、运行命令、生成证据
+    R-->>S: 返回 build report / test log / artifact paths
+    S->>C: 提交证据包进行 review
+    C-->>S: APPROVED 或 CHANGES_REQUESTED
+    alt 需要修复
+        S->>R: 发送 next_fix 精准修复指令
+        R-->>S: 重新提交证据
+        S->>C: 复审
+    else 通过
+        S->>V: 展示完成状态和证据摘要
+        S-->>U: 等待用户最终确认
+    end
+    </div>
+  </section>
+</main>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "dark",
+    securityLevel: "loose",
+    flowchart: { curve: "basis" },
+  });
+</script>
+</body>
+</html>
