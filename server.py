@@ -172,6 +172,26 @@ def apply_auth_env():
     return mode
 
 
+def remember_pending_start(task_text: str, max_round: int, direct_reasonix: bool):
+    global _pending_start_request
+    _pending_start_request = {
+        "task": task_text,
+        "max_round": max_round,
+        "direct_reasonix": direct_reasonix,
+        "workspace": str(load_workspace_root()),
+        "task_excerpt": task_text.strip()[:240],
+        "created_at": time.time(),
+    }
+    emit("auth_request", {
+        "action": "start",
+        "mode": load_auth()["mode"],
+        "workspace": _pending_start_request["workspace"],
+        "task_excerpt": _pending_start_request["task_excerpt"],
+        "message": "Codex/Reasonix execution requires authorization.",
+    })
+    return _pending_start_request
+
+
 def load_model_config():
     defaults = {
         "openai_profile": "",
@@ -180,6 +200,9 @@ def load_model_config():
         "deepseek_base_url": "https://api.deepseek.com",
         "deepseek_model": "deepseek-v4-pro",
         "deepseek_api_key_set": bool(os.environ.get("DEEPSEEK_API_KEY")),
+        "vision_base_url": "https://api.xiaomimimo.com/v1",
+        "vision_model": "mimo-v2.5",
+        "vision_api_key_set": bool(os.environ.get("VISION_API_KEY") or os.environ.get("MIMO_API_KEY")),
     }
     if not CONFIG_FILE.exists():
         return defaults
@@ -194,6 +217,9 @@ def load_model_config():
         "deepseek_base_url": data.get("deepseek_base_url", defaults["deepseek_base_url"]),
         "deepseek_model": data.get("deepseek_model", defaults["deepseek_model"]),
         "deepseek_api_key_set": bool(data.get("deepseek_api_key")) or defaults["deepseek_api_key_set"],
+        "vision_base_url": data.get("vision_base_url", defaults["vision_base_url"]),
+        "vision_model": data.get("vision_model", defaults["vision_model"]),
+        "vision_api_key_set": bool(data.get("vision_api_key")) or defaults["vision_api_key_set"],
     }
 
 
@@ -219,6 +245,12 @@ def save_model_config(data):
         existing["deepseek_model"] = model
     if data.get("deepseek_api_key"):
         existing["deepseek_api_key"] = data["deepseek_api_key"].strip()
+    if "vision_base_url" in data:
+        existing["vision_base_url"] = data.get("vision_base_url", "").strip() or "https://api.xiaomimimo.com/v1"
+    if "vision_model" in data:
+        existing["vision_model"] = data.get("vision_model", "").strip() or "mimo-v2.5"
+    if data.get("vision_api_key"):
+        existing["vision_api_key"] = data["vision_api_key"].strip()
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
     return load_model_config()
@@ -243,6 +275,15 @@ def apply_model_config_env():
         os.environ["OPENAI_REASONING"] = data["openai_reasoning"]
     if data.get("deepseek_model"):
         os.environ["REASONIX_MODEL"] = data["deepseek_model"]
+    if data.get("vision_api_key"):
+        os.environ["VISION_API_KEY"] = data["vision_api_key"]
+        os.environ["MIMO_API_KEY"] = data["vision_api_key"]
+    if data.get("vision_base_url"):
+        os.environ["VISION_BASE_URL"] = data["vision_base_url"]
+        os.environ["MIMO_BASE_URL"] = data["vision_base_url"]
+    if data.get("vision_model"):
+        os.environ["VISION_MODEL"] = data["vision_model"]
+        os.environ["MIMO_MODEL"] = data["vision_model"]
 
 
 def _new_conversation(
@@ -1340,6 +1381,7 @@ _current_proc: subprocess.Popen | None = None
 _pipeline_thread: threading.Thread | None = None
 _real_dialogue_thread: threading.Thread | None = None
 _dev_rehearsal_thread: threading.Thread | None = None
+_pending_start_request: dict | None = None
 _codex_app_worker: CodexAppWorker | None = None
 
 
@@ -1467,6 +1509,26 @@ def api_test_model():
             worker = get_codex_app_worker()
             text = worker.ask("Reply OK.").strip()
             return {"ok": True, "message": text[:120] or "OK"}
+        except Exception as exc:
+            return {"ok": False, "message": str(exc)}, 502
+
+    if provider == "vision":
+        try:
+            from openai import OpenAI
+
+            config = load_model_config()
+            api_key = os.environ.get("VISION_API_KEY") or os.environ.get("MIMO_API_KEY") or ""
+            if not api_key:
+                return {"ok": False, "message": "VISION_API_KEY or MIMO_API_KEY not set"}, 400
+            client = OpenAI(api_key=api_key, base_url=config["vision_base_url"])
+            response = client.chat.completions.create(
+                model=config["vision_model"],
+                messages=[{"role": "user", "content": "Reply OK only."}],
+                max_tokens=8,
+                temperature=0,
+            )
+            content = response.choices[0].message.content or ""
+            return {"ok": True, "message": content.strip() or "OK"}
         except Exception as exc:
             return {"ok": False, "message": str(exc)}, 502
 
@@ -1779,26 +1841,8 @@ def api_file_raw():
     return send_file(target)
 
 
-@app.route("/api/start", methods=["POST"])
-def api_start():
+def start_pipeline_from_request(task_text: str, max_round: int, direct_reasonix: bool):
     global _pipeline_thread, _current_proc
-
-    load_workspace_root()
-    data = request.get_json()
-    task_text = data.get("task", "")
-    max_round = data.get("max_round", 3)
-    direct_reasonix = bool(data.get("direct_reasonix") or data.get("skip_plan") or data.get("packet_mode"))
-
-    if not task_text.strip():
-        return {"error": "task is empty"}, 400
-
-    auth = load_auth()
-    if not is_authorized_for_pipeline():
-        return {
-            "error": "authorization_required",
-            "mode": auth["mode"],
-            "message": "Codex/Reasonix execution requires authorization."
-        }, 403
 
     if is_underspecified_task(task_text):
         return {
@@ -1832,6 +1876,57 @@ def api_start():
         "task_id": state.get("task_id", ""),
         "direct_reasonix": direct_reasonix,
     }
+
+
+@app.route("/api/start", methods=["POST"])
+def api_start():
+    load_workspace_root()
+    data = request.get_json(silent=True) or {}
+    task_text = data.get("task", "")
+    max_round = data.get("max_round", 3)
+    direct_reasonix = bool(data.get("direct_reasonix") or data.get("skip_plan") or data.get("packet_mode"))
+
+    if not task_text.strip():
+        return {"error": "task is empty"}, 400
+
+    auth = load_auth()
+    if not is_authorized_for_pipeline():
+        if auth["mode"] == "ask":
+            remember_pending_start(task_text, max_round, direct_reasonix)
+        return {
+            "error": "authorization_required",
+            "mode": auth["mode"],
+            "message": "Codex/Reasonix execution requires authorization."
+        }, 403
+
+    return start_pipeline_from_request(task_text, max_round, direct_reasonix)
+
+
+@app.route("/api/auth/pending-start", methods=["GET", "POST"])
+def api_auth_pending_start():
+    global _pending_start_request
+    if request.method == "GET":
+        pending = dict(_pending_start_request or {})
+        if pending:
+            pending.pop("task", None)
+        return {"pending": bool(_pending_start_request), "request": pending}
+
+    data = request.get_json(silent=True) or {}
+    decision = data.get("decision", "once")
+    if decision not in {"once", "allow", "yolo"}:
+        return {"error": "invalid_auth_decision"}, 400
+    if not _pending_start_request:
+        return {"error": "no_pending_start"}, 404
+
+    pending = _pending_start_request
+    _pending_start_request = None
+    if decision in {"allow", "yolo"}:
+        save_auth({"mode": decision})
+    return start_pipeline_from_request(
+        pending["task"],
+        pending["max_round"],
+        pending["direct_reasonix"],
+    )
 
 
 @app.route("/api/crosstalk", methods=["POST"])

@@ -72,7 +72,9 @@ flowchart TB
 - Redirects `/` to `/qa-viewer`; the open-source build does not expose the
   earlier experimental main console as a product entry.
 - Stores all runtime state under `.agent/` and `.reasonix/`.
-- Supports local authorization modes: ask, allow, deny, and yolo.
+- Supports local authorization modes exposed in `/qa-viewer`: ask, automatic
+  allow, and YOLO trust. The legacy `deny` API mode is still accepted for
+  adapters, but it is not shown as a primary UI action.
 - Lets a Codex skill submit structured implementation packets to the local
   bridge instead of spawning a generic coding subagent.
 - Uses a Codex QA review profile inspired by the standalone `codex-qa` workflow:
@@ -117,7 +119,9 @@ Important variables:
 - `REASONIX_CLI`: optional worker executable override, default `reasonix`.
 - `OPENAI_PROFILE`, `OPENAI_MODEL`, `OPENAI_REASONING`: optional Codex controls.
 - `VISION_PROVIDER`, `VISION_BASE_URL`, `VISION_MODEL`, `VISION_API_KEY`:
-  optional visual QA model settings.
+  optional visual QA model settings. The default visual endpoint shape is
+  OpenAI-compatible, with `VISION_BASE_URL=https://api.xiaomimimo.com/v1` and
+  `VISION_MODEL=mimo-v2.5`.
 
 The repository also includes [config.example.json](config.example.json) as a
 shape reference for GUI or adapter configuration. Runtime secrets should still
@@ -133,6 +137,17 @@ python server.py
 Then open [http://127.0.0.1:51514/qa-viewer](http://127.0.0.1:51514/qa-viewer).
 Opening [http://127.0.0.1:51514/](http://127.0.0.1:51514/) redirects to the
 same viewer.
+
+The viewer includes the local controls needed for the open-source workflow:
+
+- CLI authorization: ask, automatic allow, or YOLO trust.
+- Model configuration: DeepSeek/Reasonix worker settings, Codex CLI controls,
+  and visual model settings.
+- Connection tests for DeepSeek, Codex, and the visual model.
+
+When the delegation skill hits an ask-mode authorization gate, `/qa-viewer`
+shows a pending authorization dialog. Approving it lets the skill continue
+without asking the Codex conversation to manually retry.
 
 On Windows you can also double-click:
 

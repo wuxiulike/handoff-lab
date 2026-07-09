@@ -30,6 +30,21 @@ def test_qa_viewer_page_is_independent_and_uses_current_stream():
     assert "formatDetail" in html
     assert "KIND_ICON" in html
     assert "removeDuplicateWorkspaceSnapshots" in html
+    assert 'fetch("/api/auth"' in html
+    assert 'fetch("/api/model-config"' in html
+    assert 'fetch("/api/test-model"' in html
+    assert 'fetch("/api/auth/pending-start"' in html
+    assert "CLI 授权" in html
+    assert "模型配置" in html
+    assert "deepseek-v4-pro" in html
+    assert "YOLO完全信任" in html
+    assert "拒绝" not in html
+    assert "视觉模型" in html
+    assert "测试视觉模型" in html
+    assert "mimo-v2.5" in html
+    assert "https://api.xiaomimimo.com/v1" in html
+    assert "auth_request" in html
+    assert "providerStatusId" in html
 
 
 def test_qa_viewer_page_renders_watch_workspace(monkeypatch, tmp_path):

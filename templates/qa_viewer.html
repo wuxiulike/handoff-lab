@@ -29,11 +29,34 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:"Microsoft YaHe
 .label{font-size:12px;color:var(--muted);margin-bottom:8px}
 .row{display:flex;gap:8px;align-items:center}
 input,button{font:inherit}
-input{width:64px;background:#0b1016;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:8px}
+input,select{width:64px;background:#0b1016;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:8px}
+select{width:100%}
 button{background:#1d2632;border:1px solid var(--line);border-radius:7px;color:var(--text);padding:8px 10px;cursor:pointer;font-weight:700}
 button:hover{border-color:var(--blue);color:#fff}
 .primary{background:#1d5ea8;border-color:#2f81f7}
 .danger{background:#412026;border-color:#79323a}
+.success{background:#173923;border-color:#2e7d4f}
+.warnbtn{background:#392c13;border-color:#8a6a24}
+.segmented{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.auth-segment{grid-template-columns:repeat(3,1fr)}
+.segmented button{padding:7px 6px;font-size:12px}
+.segmented button.active{border-color:var(--green);box-shadow:0 0 0 1px rgba(66,211,146,.35) inset;color:#fff}
+.note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:8px}
+.form-grid{display:grid;gap:12px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.field input,.field select{width:100%}
+.field small{display:block;color:var(--muted);font-size:11px;margin-top:5px;line-height:1.45}
+.settings-btn{min-width:42px}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.58);display:none;align-items:center;justify-content:center;padding:24px;z-index:20}
+.modal-backdrop.open{display:flex}
+.modal{width:min(720px,100%);max-height:92vh;overflow:auto;background:#10161e;border:1px solid var(--line);border-radius:10px;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
+.modal-title{font-weight:800;color:#f0f6ff}
+.modal-body{padding:18px;display:grid;gap:16px}
+.settings-section{border:1px solid var(--line);background:#0c1117;border-radius:8px;padding:14px}
+.settings-section h3{font-size:14px;margin:0 0 12px;color:#f0f6ff}
+.settings-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.inline-status{font-size:12px;color:var(--muted);min-height:18px;margin-top:8px;white-space:pre-wrap}
 .stat{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
 .stat:last-child{border-bottom:0}
 .stat b{color:var(--text);font-weight:700}
@@ -108,6 +131,17 @@ a:hover{text-decoration:underline}
     </div>
 
     <div class="control-card">
+      <div class="label">CLI 授权</div>
+      <div class="stat"><span>当前模式</span><b id="authMode">读取中</b></div>
+      <div class="segmented auth-segment" style="margin-top:10px">
+        <button data-auth="ask" onclick="setAuthMode('ask')">询问</button>
+        <button data-auth="allow" class="success" onclick="setAuthMode('allow')">自动</button>
+        <button data-auth="yolo" class="warnbtn" onclick="setAuthMode('yolo')">YOLO完全信任</button>
+      </div>
+      <div id="authStatus" class="note">自动/YOLO 才会直接启动；询问模式会弹窗确认。</div>
+    </div>
+
+    <div class="control-card">
       <div class="stat"><span>连接</span><b><span id="dot" class="dot"></span><span id="conn">连接中</span></b></div>
       <div class="stat"><span>事件</span><b id="eventCount">0</b></div>
       <div class="stat"><span>轮次</span><b id="roundStat">-</b></div>
@@ -137,6 +171,7 @@ a:hover{text-decoration:underline}
         <div class="hint">复用当前服务的 SSE：<code>/stream</code>。打开 <code>/</code> 会自动进入本查看器。</div>
       </div>
       <div class="toolbar">
+        <button class="settings-btn" onclick="openSettings()" title="模型配置">设置</button>
         <button onclick="location.reload()">刷新</button>
       </div>
     </header>
@@ -149,6 +184,125 @@ a:hover{text-decoration:underline}
       </div>
     </section>
   </main>
+</div>
+
+<div id="settingsModal" class="modal-backdrop" onclick="closeSettingsOnBackdrop(event)">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-head">
+      <div>
+        <div id="settingsTitle" class="modal-title">模型配置</div>
+        <div class="hint">配置只保存在本机 `.agent/model_config.json`；真实密钥不会进入 Git。</div>
+      </div>
+      <button onclick="closeSettings()">关闭</button>
+    </div>
+    <div class="modal-body">
+      <section class="settings-section">
+        <h3>DeepSeek / Reasonix Worker</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="deepseekBaseUrl">Base URL</label>
+            <input id="deepseekBaseUrl" value="https://api.deepseek.com">
+          </div>
+          <div class="field">
+            <label for="deepseekModel">Model Name</label>
+            <select id="deepseekModel">
+              <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+              <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+              <option value="deepseek-chat">deepseek-chat（将于 2026/07/24 弃用）</option>
+              <option value="deepseek-reasoner">deepseek-reasoner（将于 2026/07/24 弃用）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="deepseekApiKey">API Key</label>
+            <input id="deepseekApiKey" type="password" placeholder="留空表示不修改已保存密钥">
+            <small id="deepseekKeyHint">读取中</small>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="primary" onclick="saveModelConfig()">保存配置</button>
+          <button id="testDeepseekBtn" onclick="testModel('deepseek')">测试 DeepSeek</button>
+        </div>
+        <div id="deepseekTestStatus" class="inline-status"></div>
+      </section>
+
+      <section class="settings-section">
+        <h3>OpenAI / Codex CLI</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="openaiProfile">OpenAI Profile</label>
+            <input id="openaiProfile" placeholder="例如 default；留空使用 Codex 当前登录态">
+          </div>
+          <div class="field">
+            <label for="openaiModel">OpenAI Model</label>
+            <input id="openaiModel" placeholder="留空使用 Codex CLI 默认模型">
+          </div>
+          <div class="field">
+            <label for="openaiReasoning">Reasoning Mode</label>
+            <select id="openaiReasoning">
+              <option value="default">default</option>
+              <option value="minimal">minimal</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="primary" onclick="saveModelConfig()">保存配置</button>
+          <button id="testOpenaiBtn" onclick="testModel('openai')">测试 Codex</button>
+        </div>
+        <div id="openaiTestStatus" class="inline-status"></div>
+      </section>
+
+      <section class="settings-section">
+        <h3>视觉模型</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="visionBaseUrl">Base URL</label>
+            <input id="visionBaseUrl" value="https://api.xiaomimimo.com/v1">
+          </div>
+          <div class="field">
+            <label for="visionModel">Model Name</label>
+            <input id="visionModel" value="mimo-v2.5">
+          </div>
+          <div class="field">
+            <label for="visionApiKey">API Key</label>
+            <input id="visionApiKey" type="password" placeholder="留空表示不修改已保存密钥">
+            <small id="visionKeyHint">读取中</small>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="primary" onclick="saveModelConfig()">保存配置</button>
+          <button id="testVisionBtn" onclick="testModel('vision')">测试视觉模型</button>
+        </div>
+        <div id="visionTestStatus" class="inline-status"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div id="authPromptModal" class="modal-backdrop" onclick="closeAuthPromptOnBackdrop(event)">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authPromptTitle">
+    <div class="modal-head">
+      <div>
+        <div id="authPromptTitle" class="modal-title">需要授权启动 Worker</div>
+        <div class="hint">Handoff Lab 收到外部 Codex skill 的启动请求。</div>
+      </div>
+      <button onclick="closeAuthPrompt()">稍后处理</button>
+    </div>
+    <div class="modal-body">
+      <section class="settings-section">
+        <h3>待启动任务</h3>
+        <div id="authPromptDetail" class="event-detail" style="max-height:180px"></div>
+        <div class="settings-actions">
+          <button class="primary" onclick="approvePendingStart('once')">仅本次启动</button>
+          <button class="success" onclick="approvePendingStart('allow')">自动允许并启动</button>
+          <button class="warnbtn" onclick="approvePendingStart('yolo')">YOLO完全信任并启动</button>
+        </div>
+        <div id="authPromptStatus" class="inline-status"></div>
+      </section>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -175,6 +329,7 @@ let currentTokenKey = "";
 let eventCount = 0;
 let autoScroll = true;
 let expanded = false;
+let authMode = "ask";
 
 function nowTime(){
   return new Date().toLocaleTimeString("zh-CN",{hour12:false});
@@ -311,6 +466,12 @@ function handleEvent(eventType, data){
     addCard({kind:"system",label:"Status",title:data.text || "状态",detail:JSON.stringify(data,null,2)});
     return;
   }
+  if (eventType === "auth_request") {
+    document.getElementById("statusStat").textContent = "等待授权";
+    showAuthPrompt(data);
+    addCard({kind:"warn",label:"Auth",title:"Worker 启动需要授权",detail:JSON.stringify(data,null,2),collapsed:false});
+    return;
+  }
   if (eventType === "stopped") {
     document.getElementById("statusStat").textContent = "已停止";
     addCard({kind:"error",label:"Stop",title:data.reason || "已停止",detail:JSON.stringify(data,null,2),collapsed:false});
@@ -342,7 +503,7 @@ function connect(){
     document.getElementById("dot").classList.add("on");
     document.getElementById("conn").textContent = "已连接";
   };
-  const events = ["connected","round_start","token","status","agent_event","step_done","review","qa_external","file_update","context","stopped"];
+  const events = ["connected","round_start","token","status","auth_request","agent_event","step_done","review","qa_external","file_update","context","stopped"];
   events.forEach(name => es.addEventListener(name, e => {
     try { handleEvent(name, e.data ? JSON.parse(e.data) : {}); } catch(err) {}
   }));
@@ -350,6 +511,204 @@ function connect(){
     document.getElementById("dot").classList.remove("on");
     document.getElementById("conn").textContent = "重连中";
   };
+}
+
+function updateAuthUi(mode){
+  authMode = mode || "ask";
+  document.getElementById("authMode").textContent = authMode;
+  document.querySelectorAll("[data-auth]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.auth === authMode);
+  });
+  const status = document.getElementById("authStatus");
+  if (authMode === "allow") status.textContent = "已允许 worker 执行。适合日常开发任务。";
+  else if (authMode === "yolo") status.textContent = "YOLO 已开启：worker 可更自由执行本地命令，请只用于可信目录。";
+  else status.textContent = "当前为询问模式：外部 skill 会被授权拦截，需切到允许或 YOLO。";
+}
+
+function loadAuthMode(){
+  fetch("/api/auth")
+    .then(r => r.json())
+    .then(data => updateAuthUi(data.mode))
+    .catch(err => {
+      document.getElementById("authStatus").textContent = `读取授权失败：${err.message}`;
+    });
+}
+
+function setAuthMode(mode){
+  fetch("/api/auth", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({mode})
+  }).then(r => r.json().then(data => ({ok:r.ok,status:r.status,data})))
+    .then(({ok,status,data}) => {
+      if (!ok) throw new Error(data.error || `HTTP ${status}`);
+      updateAuthUi(data.mode);
+      addCard({kind:"system",label:"Auth",title:`CLI 授权已切换为 ${data.mode}`,detail:JSON.stringify(data,null,2)});
+    })
+    .catch(err => {
+      document.getElementById("authStatus").textContent = `授权切换失败：${err.message}`;
+    });
+}
+
+function openSettings(){
+  document.getElementById("settingsModal").classList.add("open");
+  loadModelConfig();
+}
+
+function closeSettings(){
+  document.getElementById("settingsModal").classList.remove("open");
+}
+
+function closeSettingsOnBackdrop(event){
+  if (event.target.id === "settingsModal") closeSettings();
+}
+
+function loadModelConfig(){
+  fetch("/api/model-config")
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById("deepseekBaseUrl").value = data.deepseek_base_url || "https://api.deepseek.com";
+      document.getElementById("deepseekModel").value = data.deepseek_model || "deepseek-v4-pro";
+      document.getElementById("openaiProfile").value = data.openai_profile || "";
+      document.getElementById("openaiModel").value = data.openai_model || "";
+      document.getElementById("openaiReasoning").value = data.openai_reasoning || "default";
+      document.getElementById("visionBaseUrl").value = data.vision_base_url || "https://api.xiaomimimo.com/v1";
+      document.getElementById("visionModel").value = data.vision_model || "mimo-v2.5";
+      document.getElementById("deepseekKeyHint").textContent = data.deepseek_api_key_set ? "已保存 API Key；留空不会覆盖。" : "尚未保存 API Key。";
+      document.getElementById("visionKeyHint").textContent = data.vision_api_key_set ? "已保存 API Key；留空不会覆盖。" : "尚未保存 API Key。";
+    })
+    .catch(err => {
+      document.getElementById("deepseekTestStatus").textContent = `读取配置失败：${err.message}`;
+    });
+}
+
+function collectModelConfig(){
+  const payload = {
+    deepseek_base_url: document.getElementById("deepseekBaseUrl").value.trim(),
+    deepseek_model: document.getElementById("deepseekModel").value,
+    openai_profile: document.getElementById("openaiProfile").value.trim(),
+    openai_model: document.getElementById("openaiModel").value.trim(),
+    openai_reasoning: document.getElementById("openaiReasoning").value,
+    vision_base_url: document.getElementById("visionBaseUrl").value.trim(),
+    vision_model: document.getElementById("visionModel").value.trim(),
+  };
+  const deepseekKey = document.getElementById("deepseekApiKey").value.trim();
+  if (deepseekKey) payload.deepseek_api_key = deepseekKey;
+  const visionKey = document.getElementById("visionApiKey").value.trim();
+  if (visionKey) payload.vision_api_key = visionKey;
+  return payload;
+}
+
+function saveModelConfig(){
+  return fetch("/api/model-config", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(collectModelConfig())
+  }).then(r => r.json().then(data => ({ok:r.ok,status:r.status,data})))
+    .then(({ok,status,data}) => {
+      if (!ok) throw new Error(data.error || `HTTP ${status}`);
+      document.getElementById("deepseekApiKey").value = "";
+      document.getElementById("visionApiKey").value = "";
+      document.getElementById("deepseekKeyHint").textContent = data.deepseek_api_key_set ? "已保存 API Key；留空不会覆盖。" : "尚未保存 API Key。";
+      document.getElementById("visionKeyHint").textContent = data.vision_api_key_set ? "已保存 API Key；留空不会覆盖。" : "尚未保存 API Key。";
+      document.getElementById("deepseekTestStatus").textContent = "配置已保存。";
+      document.getElementById("openaiTestStatus").textContent = "配置已保存。";
+      document.getElementById("visionTestStatus").textContent = "配置已保存。";
+      return data;
+    })
+    .catch(err => {
+      document.getElementById("deepseekTestStatus").textContent = `保存失败：${err.message}`;
+      document.getElementById("openaiTestStatus").textContent = `保存失败：${err.message}`;
+      document.getElementById("visionTestStatus").textContent = `保存失败：${err.message}`;
+      throw err;
+  });
+}
+
+function providerStatusId(provider){
+  if (provider === "deepseek") return "deepseekTestStatus";
+  if (provider === "openai") return "openaiTestStatus";
+  return "visionTestStatus";
+}
+
+function providerButtonId(provider){
+  if (provider === "deepseek") return "testDeepseekBtn";
+  if (provider === "openai") return "testOpenaiBtn";
+  return "testVisionBtn";
+}
+
+function showAuthPrompt(data){
+  const detail = {
+    workspace: data.workspace || "",
+    task_excerpt: data.task_excerpt || "",
+    message: data.message || "",
+  };
+  document.getElementById("authPromptDetail").textContent = JSON.stringify(detail, null, 2);
+  document.getElementById("authPromptStatus").textContent = "请选择本次如何授权。";
+  document.getElementById("authPromptModal").classList.add("open");
+}
+
+function closeAuthPrompt(){
+  document.getElementById("authPromptModal").classList.remove("open");
+}
+
+function closeAuthPromptOnBackdrop(event){
+  if (event.target.id === "authPromptModal") closeAuthPrompt();
+}
+
+function approvePendingStart(decision){
+  document.getElementById("authPromptStatus").textContent = "启动中...";
+  fetch("/api/auth/pending-start", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({decision})
+  }).then(r => r.json().then(data => ({ok:r.ok,status:r.status,data})))
+    .then(({ok,status,data}) => {
+      if (!ok) throw new Error(data.message || data.error || `HTTP ${status}`);
+      if (decision === "allow" || decision === "yolo") updateAuthUi(decision);
+      document.getElementById("authPromptStatus").textContent = "已授权并启动。";
+      addCard({kind:"system",label:"Auth",title:"已授权并启动待处理任务",detail:JSON.stringify(data,null,2),collapsed:false});
+      closeAuthPrompt();
+    })
+    .catch(err => {
+      document.getElementById("authPromptStatus").textContent = `启动失败：${err.message}`;
+    });
+}
+
+function testModel(provider){
+  const target = providerStatusId(provider);
+  const button = document.getElementById(providerButtonId(provider));
+  const oldText = button ? button.textContent : "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "测试中...";
+  }
+  document.getElementById(target).textContent = "正在保存配置并测试连接...";
+  saveModelConfig().then(() => {
+    document.getElementById(target).textContent = "正在请求模型...";
+    fetch("/api/test-model", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({provider})
+    }).then(r => r.json().then(data => ({ok:r.ok,status:r.status,data})))
+      .then(({ok,status,data}) => {
+        if (!ok) throw new Error(data.message || data.error || `HTTP ${status}`);
+        document.getElementById(target).textContent = `连接成功：${data.message || "OK"}`;
+      })
+      .catch(err => {
+        document.getElementById(target).textContent = `连接失败：${err.message}`;
+      })
+      .finally(() => {
+        if (button) {
+          button.disabled = false;
+          button.textContent = oldText;
+        }
+      });
+  }).catch(() => {
+    if (button) {
+      button.disabled = false;
+      button.textContent = oldText;
+    }
+  });
 }
 
 function loadRecentQaEvents(){
@@ -447,6 +806,8 @@ function clearTimeline(){
 }
 
 loadWatchState();
+loadAuthMode();
+loadModelConfig();
 loadRecentQaEvents();
 connect();
 </script>

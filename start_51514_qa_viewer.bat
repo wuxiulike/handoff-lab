@@ -8,6 +8,7 @@ set "PORT=%HANDOFF_LAB_PORT%"
 set "URL=http://127.0.0.1:%PORT%/qa-viewer"
 
 echo [Handoff Lab] Starting service on port %PORT%...
+echo [Handoff Lab] Root: %ROOT%
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='SilentlyContinue';" ^
@@ -17,7 +18,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 timeout /t 1 /nobreak >nul
 
 pushd "%ROOT%"
-start "Handoff Lab %PORT%" /min python server.py
+start "Handoff Lab %PORT%" /min python "%ROOT%server.py"
 popd
 
 echo Waiting for service...

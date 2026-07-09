@@ -24,6 +24,9 @@ def test_model_config_saves_without_echoing_api_key(tmp_path, monkeypatch):
         "deepseek_base_url": "https://example.test",
         "deepseek_model": "deepseek-v4-pro",
         "deepseek_api_key": "sk-test",
+        "vision_base_url": "https://vision.example.test/v1",
+        "vision_model": "mimo-v2.5",
+        "vision_api_key": "vision-secret",
     })
 
     assert response.status_code == 200
@@ -34,7 +37,11 @@ def test_model_config_saves_without_echoing_api_key(tmp_path, monkeypatch):
     assert payload["deepseek_base_url"] == "https://example.test"
     assert payload["deepseek_model"] == "deepseek-v4-pro"
     assert payload["deepseek_api_key_set"] is True
+    assert payload["vision_base_url"] == "https://vision.example.test/v1"
+    assert payload["vision_model"] == "mimo-v2.5"
+    assert payload["vision_api_key_set"] is True
     assert "sk-test" not in response.get_data(as_text=True)
+    assert "vision-secret" not in response.get_data(as_text=True)
 
 
 def test_model_config_rejects_unsupported_deepseek_model(tmp_path):
@@ -67,3 +74,15 @@ def test_apply_auth_env_distinguishes_allow_and_yolo(tmp_path):
     server.save_auth({"mode": "yolo"})
     server.apply_auth_env()
     assert os.environ["REASONIX_YOLO"] == "1"
+
+
+def test_test_model_supports_vision_provider_without_key(tmp_path, monkeypatch):
+    server.CONFIG_FILE = tmp_path / "model_config.json"
+    monkeypatch.delenv("VISION_API_KEY", raising=False)
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+    client = server.app.test_client()
+
+    response = client.post("/api/test-model", json={"provider": "vision"})
+
+    assert response.status_code == 400
+    assert "VISION_API_KEY" in response.get_json()["message"]

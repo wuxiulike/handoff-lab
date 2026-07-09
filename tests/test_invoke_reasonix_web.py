@@ -53,3 +53,40 @@ def test_discover_base_url_rejects_ambiguous_services(monkeypatch, tmp_path):
         assert "--base-url" in message
     else:
         raise AssertionError("expected ambiguous service discovery to fail")
+
+
+def test_wait_for_authorized_start_posts_pending_when_auth_becomes_yolo(monkeypatch):
+    calls = []
+
+    def fake_get_json(base_url, path, timeout=5):
+        calls.append(("GET", path))
+        if path == "/api/auth":
+            return {"mode": "yolo"}
+        if path == "/api/auth/pending-start":
+            return {"pending": True}
+        if path == "/api/state":
+            return {"running": False, "terminal": False, "status": "WAIT_AUTH"}
+        return {}
+
+    def fake_post_json(base_url, path, payload):
+        calls.append(("POST", path, payload))
+        return {"status": "started", "task_id": "manual-task"}
+
+    monkeypatch.setattr(invoke_reasonix_web, "get_json", fake_get_json)
+    monkeypatch.setattr(invoke_reasonix_web, "post_json", fake_post_json)
+
+    result = invoke_reasonix_web.wait_for_authorized_start("http://127.0.0.1:51514", 5, 0)
+
+    assert result["status"] == "started"
+    assert ("POST", "/api/auth/pending-start", {"decision": "yolo"}) in calls
+
+
+def test_bridge_http_error_parses_json_payload():
+    error = invoke_reasonix_web.BridgeHttpError(
+        "/api/start",
+        403,
+        '{"error":"authorization_required","mode":"ask"}',
+    )
+
+    assert error.status == 403
+    assert error.payload["error"] == "authorization_required"

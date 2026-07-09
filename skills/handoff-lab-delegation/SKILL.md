@@ -165,9 +165,10 @@ Direct packet mode skips extra Codex planning and hands the packet to the worker
 immediately. Use normal mode only when Codex still needs to create the plan
 first.
 
-This script calls `/api/workspace`, `/api/qa-watch`, and `/api/start`. If it
-fails with `authorization_required`, ask the user to authorize the Web UI; do
-not replace the worker with a generic Codex worker.
+This script calls `/api/workspace`, `/api/qa-watch`, and `/api/start`. If
+`/api/start` returns `authorization_required`, the script waits for the user to
+approve the pending start in `/qa-viewer` and then continues automatically. Do
+not replace the worker with a generic Codex worker while waiting.
 
 Port handling:
 
