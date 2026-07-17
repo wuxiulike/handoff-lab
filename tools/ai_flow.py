@@ -17,6 +17,12 @@ Usage:
   python tools/ai_flow.py one-round --test-cmd "pytest"
 """
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import argparse
 import json
 import os
@@ -586,9 +592,7 @@ def resolve_reasonix_cli() -> str:
 def run_reasonix_cli(task: str, on_token=None, on_progress=None) -> str:
     cli = resolve_reasonix_cli()
     model = os.environ.get("REASONIX_MODEL", "deepseek-v4-pro")
-    cmd = [cli, "acp", "--model", model, "--dir", str(ROOT)]
-    if os.environ.get("REASONIX_YOLO", "0") == "1":
-        cmd.append("--yolo")
+    cmd = [cli, "acp", "--model", model]
     max_ui_chars = int(os.environ.get("REASONIX_UI_MAX_CHARS", "1200"))
     max_tool_chars = int(os.environ.get("REASONIX_UI_TOOL_MAX_CHARS", "800"))
     env = os.environ.copy()
