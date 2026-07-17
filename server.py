@@ -1,5 +1,11 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Handoff Lab local planner-worker monitor."""
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 import json
 import os
